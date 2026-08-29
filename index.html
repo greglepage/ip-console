@@ -1,0 +1,407 @@
+<title>ip report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #14171E;
+    --paper: #EDEFF3;
+    --surface: #FFFFFF;
+    --surface-2: #F3F4F8;
+    --line: #D8DBE3;
+    --muted: #5B6270;
+    --signal: #C15A1E;
+    --signal-ink: #A04A16;
+    --signal-bg: #FCEBDD;
+    --good: #1F8A4C;
+    --good-bg: #E4F5EA;
+    --warn: #92650A;
+    --warn-bg: #FBF0D8;
+    --bad: #B7324A;
+    --bad-bg: #FBE6EA;
+    --shadow: 0 1px 2px rgba(20,23,30,0.06), 0 10px 28px -14px rgba(20,23,30,0.16);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #EAEBF0;
+      --paper: #0E1015;
+      --surface: #171A21;
+      --surface-2: #1D212A;
+      --line: #2B303B;
+      --muted: #8B92A2;
+      --signal: #E17A3F;
+      --signal-ink: #F2A06E;
+      --signal-bg: #2E1B10;
+      --good: #46C97D;
+      --good-bg: #143224;
+      --warn: #E0B23F;
+      --warn-bg: #362B11;
+      --bad: #F0667E;
+      --bad-bg: #3A1A22;
+      --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 10px 28px -14px rgba(0,0,0,0.55);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink: #EAEBF0;
+    --paper: #0E1015;
+    --surface: #171A21;
+    --surface-2: #1D212A;
+    --line: #2B303B;
+    --muted: #8B92A2;
+    --signal: #E17A3F;
+    --signal-ink: #F2A06E;
+    --signal-bg: #2E1B10;
+    --good: #46C97D;
+    --good-bg: #143224;
+    --warn: #E0B23F;
+    --warn-bg: #362B11;
+    --bad: #F0667E;
+    --bad-bg: #3A1A22;
+    --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 10px 28px -14px rgba(0,0,0,0.55);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Sora", ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100%;
+  }
+  ::selection { background: var(--signal); color: var(--surface); }
+  a { color: var(--signal-ink); }
+
+  .mono {
+    font-family: "Space Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .shell {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 28px 24px 64px;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 22px;
+  }
+  .wordmark { display: flex; align-items: baseline; gap: 10px; }
+  .wordmark .mark {
+    font-family: "Space Mono", monospace;
+    font-weight: 700;
+    font-size: 20px;
+    letter-spacing: -0.01em;
+  }
+  .wordmark .tag { color: var(--muted); font-size: 13px; }
+  .topbar-right { color: var(--muted); font-size: 12.5px; text-align: right; line-height: 1.5; }
+  .topbar-right .host { font-family: "Space Mono", monospace; color: var(--ink); }
+
+  /* ---------- hero ---------- */
+  .hero {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    padding: 28px 28px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: "";
+    position: absolute;
+    top: -60px; right: -60px;
+    width: 220px; height: 220px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--signal-bg) 0%, transparent 70%);
+  }
+  .hero-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--signal-ink);
+    margin-bottom: 8px;
+  }
+  .hero-ip {
+    font-family: "Space Mono", monospace;
+    font-weight: 700;
+    font-size: clamp(28px, 6vw, 44px);
+    letter-spacing: -0.01em;
+    word-break: break-all;
+    text-wrap: balance;
+  }
+  .hero-place {
+    margin-top: 10px;
+    font-size: 16px;
+    color: var(--muted);
+  }
+  .hero-place strong { color: var(--ink); font-weight: 600; }
+  .hero-flags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 16px;
+    position: relative;
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 5px 11px;
+    border-radius: 999px;
+  }
+  .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .pill.good { background: var(--good-bg); color: var(--good); }
+  .pill.warn { background: var(--warn-bg); color: var(--warn); }
+  .pill.bad  { background: var(--bad-bg);  color: var(--bad); }
+  .pill.neutral { background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); }
+
+  .copy-btn {
+    position: absolute;
+    top: 24px; right: 24px;
+    background: var(--surface-2);
+    color: var(--muted);
+    border: 1px solid var(--line);
+    font-family: "Sora", sans-serif;
+    font-weight: 600;
+    font-size: 12.5px;
+    padding: 7px 13px;
+    border-radius: 7px;
+    cursor: pointer;
+    z-index: 1;
+  }
+  .copy-btn:hover { color: var(--ink); border-color: var(--signal); }
+  .copy-btn:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+
+  /* ---------- section grid ---------- */
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-top: 16px;
+  }
+  @media (max-width: 640px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .card-head {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface-2);
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+  table.kv { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  table.kv td {
+    padding: 9px 16px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  table.kv tr:last-child td { border-bottom: none; }
+  table.kv td:first-child {
+    color: var(--muted);
+    font-weight: 500;
+    white-space: nowrap;
+    width: 1%;
+    padding-right: 20px;
+  }
+  table.kv td:last-child {
+    font-family: "Space Mono", monospace;
+    word-break: break-word;
+  }
+
+  .note {
+    font-size: 12.5px;
+    color: var(--muted);
+    padding: 10px 16px;
+    line-height: 1.6;
+  }
+
+  footer {
+    margin-top: 30px;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .loading-state {
+    padding: 40px 0;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+  }
+</style>
+
+<div class="shell">
+  <div class="topbar">
+    <div class="wordmark">
+      <span class="mark">ip.</span>
+      <span class="tag">Everything visible about this connection, right now</span>
+    </div>
+    <div class="topbar-right">
+      for remote troubleshooting<br>
+      <span class="host">ip.greglepage.com</span>
+    </div>
+  </div>
+
+  <div id="loading" class="loading-state">Reading the connection…</div>
+
+  <div id="report" style="display:none;">
+    <div class="hero">
+      <button class="copy-btn" id="copy-btn">Copy report</button>
+      <div class="hero-label">Public address</div>
+      <div class="hero-ip mono" id="hero-ip">—</div>
+      <div class="hero-place" id="hero-place">—</div>
+      <div class="hero-flags" id="hero-flags"></div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="card-head">Location</div>
+        <table class="kv" id="location-table"></table>
+      </div>
+      <div class="card">
+        <div class="card-head">Network</div>
+        <table class="kv" id="network-table"></table>
+      </div>
+      <div class="card">
+        <div class="card-head">Connection to Cloudflare</div>
+        <table class="kv" id="connection-table"></table>
+      </div>
+      <div class="card">
+        <div class="card-head">This device</div>
+        <table class="kv" id="device-table"></table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top: 14px;">
+      <div class="card-head">Reverse DNS</div>
+      <table class="kv" id="ptr-table"></table>
+      <div class="note" id="ptr-note"></div>
+    </div>
+  </div>
+
+  <footer>ip.greglepage.com — every value above comes from Cloudflare's edge at request time (geolocation, network, and connection details) plus a live reverse-DNS lookup. Nothing is cached, logged, or shared.</footer>
+</div>
+
+<script>
+  function el(tag, opts) {
+    var node = document.createElement(tag);
+    opts = opts || {};
+    if (opts.cls) node.className = opts.cls;
+    if (opts.text !== undefined) node.textContent = opts.text;
+    return node;
+  }
+  function kvRow(table, label, value) {
+    if (value === null || value === undefined || value === '') return;
+    var tr = el('tr');
+    tr.appendChild(el('td', { text: label }));
+    tr.appendChild(el('td', { text: String(value) }));
+    table.appendChild(tr);
+  }
+  function pill(container, cls, text) {
+    container.appendChild(el('span', { cls: 'pill ' + cls, text: text }));
+  }
+
+  function formatCoord(lat, lon) {
+    if (lat === null || lon === null) return null;
+    var latDeg = Math.abs(lat).toFixed(4) + '° ' + (lat >= 0 ? 'N' : 'S');
+    var lonDeg = Math.abs(lon).toFixed(4) + '° ' + (lon >= 0 ? 'E' : 'W');
+    return latDeg + ', ' + lonDeg;
+  }
+
+  var reportText = '';
+
+  fetch('/api/info').then(function (r) { return r.json(); }).then(function (d) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('report').style.display = 'block';
+
+    document.getElementById('hero-ip').textContent = d.ip;
+    var place = [d.city, d.region, d.country].filter(Boolean).join(', ');
+    document.getElementById('hero-place').innerHTML = place ? '<strong>' + place + '</strong>' : 'Location unavailable';
+
+    var flags = document.getElementById('hero-flags');
+    pill(flags, 'neutral', d.ipVersion);
+    if (d.likelyHosting) pill(flags, 'warn', 'Likely hosting/VPN, not residential');
+    else pill(flags, 'good', 'Looks residential/ISP-assigned');
+    if (d.tlsVersion) pill(flags, 'neutral', d.tlsVersion);
+    if (d.httpProtocol) pill(flags, 'neutral', d.httpProtocol);
+
+    var loc = document.getElementById('location-table');
+    kvRow(loc, 'City', d.city);
+    kvRow(loc, 'Region', d.region ? d.region + (d.regionCode ? ' (' + d.regionCode + ')' : '') : null);
+    kvRow(loc, 'Postal code', d.postalCode);
+    kvRow(loc, 'Country', d.country);
+    kvRow(loc, 'Continent', d.continent);
+    kvRow(loc, 'Timezone', d.timezone);
+    kvRow(loc, 'Coordinates', formatCoord(d.latitude, d.longitude));
+
+    var net = document.getElementById('network-table');
+    kvRow(net, 'ASN', d.asn ? 'AS' + d.asn : null);
+    kvRow(net, 'Organization', d.asOrganization);
+    kvRow(net, 'Address type', d.likelyHosting ? 'Hosting / VPN / datacenter' : 'Residential or business ISP');
+
+    var conn = document.getElementById('connection-table');
+    kvRow(conn, 'Cloudflare colo', d.colo);
+    kvRow(conn, 'HTTP protocol', d.httpProtocol);
+    kvRow(conn, 'TLS version', d.tlsVersion);
+    kvRow(conn, 'TLS cipher', d.tlsCipher);
+
+    var dev = document.getElementById('device-table');
+    kvRow(dev, 'Browser', d.browser);
+    kvRow(dev, 'Operating system', d.os);
+
+    var ptrTable = document.getElementById('ptr-table');
+    var ptrNote = document.getElementById('ptr-note');
+    if (d.ptr && d.ptr.found) {
+      d.ptr.hostnames.forEach(function (h) { kvRow(ptrTable, 'PTR', h); });
+    } else {
+      kvRow(ptrTable, 'PTR', 'No reverse record found');
+      ptrNote.textContent = 'Common for residential connections and most hosting providers alike — a missing PTR isn\'t itself unusual.';
+    }
+
+    var lines = [
+      'IP report for ' + d.ip + ' (' + d.ipVersion + ')',
+      place ? 'Location: ' + place : null,
+      d.postalCode ? 'Postal code: ' + d.postalCode : null,
+      d.timezone ? 'Timezone: ' + d.timezone : null,
+      formatCoord(d.latitude, d.longitude) ? 'Coordinates: ' + formatCoord(d.latitude, d.longitude) : null,
+      d.asn ? 'ASN: AS' + d.asn + (d.asOrganization ? ' ' + d.asOrganization : '') : null,
+      'Address type: ' + (d.likelyHosting ? 'Hosting / VPN / datacenter' : 'Residential or business ISP'),
+      d.colo ? 'Cloudflare colo: ' + d.colo : null,
+      d.httpProtocol ? 'HTTP protocol: ' + d.httpProtocol : null,
+      d.tlsVersion ? 'TLS: ' + d.tlsVersion + (d.tlsCipher ? ' (' + d.tlsCipher + ')' : '') : null,
+      'Browser: ' + d.browser,
+      'OS: ' + d.os,
+      d.ptr && d.ptr.found ? 'Reverse DNS: ' + d.ptr.hostnames.join(', ') : 'Reverse DNS: none',
+    ].filter(Boolean);
+    reportText = lines.join('\n');
+  }).catch(function (err) {
+    document.getElementById('loading').textContent = 'Could not read connection details: ' + err.message;
+  });
+
+  document.getElementById('copy-btn').addEventListener('click', function () {
+    var btn = this;
+    navigator.clipboard.writeText(reportText).then(function () {
+      var original = btn.textContent;
+      btn.textContent = 'Copied';
+      setTimeout(function () { btn.textContent = original; }, 1500);
+    });
+  });
+</script>
