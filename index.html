@@ -210,8 +210,9 @@
   .map-wrap {
     position: relative;
     width: 100%;
-    aspect-ratio: 16 / 9;
-    max-height: 340px;
+    max-width: 460px;
+    aspect-ratio: 1 / 1;
+    margin: 0 auto;
     border-radius: 8px;
     overflow: hidden;
     background: var(--surface-2);
@@ -446,7 +447,7 @@
   function renderMap(lat, lon) {
     if (lat === null || lon === null || lat === undefined || lon === undefined) return;
     lat = Number(lat); lon = Number(lon);
-    var zoom = 7;
+    var zoom = 10;
     var n = Math.pow(2, zoom);
     var fracX = (lon + 180) / 360 * n;
     var latRad = lat * Math.PI / 180;
