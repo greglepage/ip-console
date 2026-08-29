@@ -140,8 +140,19 @@
     margin-top: 10px;
     font-size: 16px;
     color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
   .hero-place strong { color: var(--ink); font-weight: 600; }
+  .flag-icon {
+    width: 20px;
+    height: 15px;
+    border-radius: 2px;
+    box-shadow: 0 0 0 1px var(--line);
+    vertical-align: middle;
+  }
+  table.kv .flag-icon { margin-right: 8px; }
   .hero-flags {
     display: flex;
     flex-wrap: wrap;
@@ -164,9 +175,22 @@
   .pill.bad  { background: var(--bad-bg);  color: var(--bad); }
   .pill.neutral { background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); }
 
+  .hero-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+    position: relative;
+    z-index: 1;
+  }
+  .hero-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
   .copy-btn {
-    position: absolute;
-    top: 24px; right: 24px;
     background: var(--surface-2);
     color: var(--muted);
     border: 1px solid var(--line);
@@ -176,7 +200,7 @@
     padding: 7px 13px;
     border-radius: 7px;
     cursor: pointer;
-    z-index: 1;
+    white-space: nowrap;
   }
   .copy-btn:hover { color: var(--ink); border-color: var(--signal); }
   .copy-btn:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
@@ -290,6 +314,20 @@
     line-height: 1.6;
   }
 
+  .speed-body {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+  }
+  .speed-result {
+    font-family: "Space Mono", monospace;
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .speed-result .unit { font-size: 13px; font-weight: 400; color: var(--muted); margin-left: 4px; }
+
   .loading-state {
     padding: 40px 0;
     text-align: center;
@@ -314,8 +352,13 @@
 
   <div id="report" style="display:none;">
     <div class="hero">
-      <button class="copy-btn" id="copy-btn">Copy report</button>
-      <div class="hero-label">Public address</div>
+      <div class="hero-top">
+        <div class="hero-label">Public address</div>
+        <div class="hero-actions">
+          <button class="copy-btn" id="copy-btn">Copy report</button>
+          <button class="copy-btn" id="download-btn">Download .txt</button>
+        </div>
+      </div>
       <div class="hero-ip mono" id="hero-ip">—</div>
       <div class="hero-place" id="hero-place">—</div>
       <div class="hero-flags" id="hero-flags"></div>
@@ -352,6 +395,15 @@
       <div class="card-head">Reverse DNS</div>
       <table class="kv" id="ptr-table"></table>
       <div class="note" id="ptr-note"></div>
+    </div>
+
+    <div class="card" style="margin-top: 14px;">
+      <div class="card-head">Download speed to Cloudflare's edge</div>
+      <div class="speed-body">
+        <div id="speed-result" class="speed-result">Not tested yet</div>
+        <button class="copy-btn" id="speed-btn">Run test (2 MB)</button>
+      </div>
+      <div class="note">Measures throughput to the nearest Cloudflare datacenter, not a full internet speed test — but a slow result here still means real content will load slowly.</div>
     </div>
   </div>
 
@@ -434,7 +486,20 @@
 
     document.getElementById('hero-ip').textContent = d.ip;
     var place = [d.city, d.region, d.country].filter(Boolean).join(', ');
-    document.getElementById('hero-place').innerHTML = place ? '<strong>' + place + '</strong>' : 'Location unavailable';
+    var heroPlace = document.getElementById('hero-place');
+    heroPlace.textContent = '';
+    if (place) {
+      if (d.countryFlagUrl) {
+        var flagImg = el('img');
+        flagImg.src = d.countryFlagUrl;
+        flagImg.alt = d.country || '';
+        flagImg.className = 'flag-icon';
+        heroPlace.appendChild(flagImg);
+      }
+      heroPlace.appendChild(el('strong', { text: place }));
+    } else {
+      heroPlace.textContent = 'Location unavailable';
+    }
 
     renderMap(d.latitude, d.longitude);
 
@@ -443,21 +508,36 @@
     var tzMismatch = browserTz && d.timezone && browserTz !== d.timezone;
 
     var flags = document.getElementById('hero-flags');
-    pill(flags, 'neutral', d.ipVersion);
+    pill(flags, 'good', d.ipVersion);
     if (d.likelyHosting) pill(flags, 'warn', 'Likely hosting/VPN, not residential');
     else pill(flags, 'good', 'Looks residential/ISP-assigned');
+    if (d.cgnat) pill(flags, 'warn', 'Carrier-grade NAT (shared IP)');
     if (d.blocklist && d.blocklist.checked) {
       pill(flags, d.blocklist.listed ? 'bad' : 'good', d.blocklist.listed ? 'On the Spamhaus blocklist' : 'Not on the Spamhaus blocklist');
     }
     if (tzMismatch) pill(flags, 'warn', "Device clock doesn't match this location's timezone");
     if (d.tlsVersion) pill(flags, 'neutral', d.tlsVersion);
-    if (d.httpProtocol) pill(flags, 'neutral', d.httpProtocol);
+    if (d.httpProtocol) pill(flags, 'neutral', d.httpProtocol + (d.httpProtocol !== 'HTTP/3' ? ' — QUIC/UDP may be blocked' : ''));
 
     var loc = document.getElementById('location-table');
     kvRow(loc, 'City', d.city);
     kvRow(loc, 'Region', d.region ? d.region + (d.regionCode ? ' (' + d.regionCode + ')' : '') : null);
     kvRow(loc, 'Postal code', d.postalCode);
-    kvRow(loc, 'Country', d.country);
+    if (d.country) {
+      var countryTr = el('tr');
+      countryTr.appendChild(el('td', { text: 'Country' }));
+      var countryTd = el('td');
+      if (d.countryFlagUrl) {
+        var countryFlagImg = el('img');
+        countryFlagImg.src = d.countryFlagUrl;
+        countryFlagImg.alt = '';
+        countryFlagImg.className = 'flag-icon';
+        countryTd.appendChild(countryFlagImg);
+      }
+      countryTd.appendChild(document.createTextNode(d.country));
+      countryTr.appendChild(countryTd);
+      loc.appendChild(countryTr);
+    }
     kvRow(loc, 'Continent', d.continent);
     kvRow(loc, 'Timezone', d.timezone);
     kvRow(loc, 'Local time there', localTimeAt(d.timezone));
@@ -504,6 +584,7 @@
       d.weather ? 'Weather there: ' + Math.round(d.weather.tempF) + '°F' + (d.weather.description ? ', ' + d.weather.description : '') : null,
       d.asn ? 'ASN: AS' + d.asn + (d.asOrganization ? ' ' + d.asOrganization : '') : null,
       'Address type: ' + (d.likelyHosting ? 'Hosting / VPN / datacenter' : 'Residential or business ISP'),
+      d.cgnat ? 'Carrier-grade NAT: yes (shared IP)' : null,
       d.blocklist && d.blocklist.checked ? 'Spamhaus Zen: ' + (d.blocklist.listed ? 'LISTED' : 'not listed') : null,
       d.colo ? 'Cloudflare colo: ' + d.colo : null,
       d.httpProtocol ? 'HTTP protocol: ' + d.httpProtocol : null,
@@ -527,5 +608,37 @@
       btn.textContent = 'Copied';
       setTimeout(function () { btn.textContent = original; }, 1500);
     });
+  });
+
+  document.getElementById('download-btn').addEventListener('click', function () {
+    var blob = new Blob([reportText], { type: 'text/plain;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'ip-report-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  });
+
+  document.getElementById('speed-btn').addEventListener('click', async function () {
+    var btn = this;
+    var result = document.getElementById('speed-result');
+    btn.disabled = true;
+    btn.textContent = 'Testing…';
+    result.textContent = 'Downloading 2 MB…';
+    try {
+      var start = performance.now();
+      var res = await fetch('/speedtest.bin?x=' + Date.now(), { cache: 'no-store' });
+      var blob = await res.blob();
+      var seconds = (performance.now() - start) / 1000;
+      var mbps = (blob.size * 8 / 1e6) / seconds;
+      result.innerHTML = mbps.toFixed(1) + '<span class="unit"> Mbps</span>';
+    } catch (err) {
+      result.textContent = 'Test failed: ' + err.message;
+    }
+    btn.disabled = false;
+    btn.textContent = 'Run again';
   });
 </script>

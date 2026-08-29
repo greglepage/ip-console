@@ -21,6 +21,23 @@ function looksLikeHosting(asOrganization) {
   return HOSTING_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
+// RFC 6598 (100.64.0.0/10) is the carrier-grade NAT range ISPs use to share
+// one public IP across many customers - a real, common reason port forwarding
+// and inbound connections silently fail even though "the internet works fine."
+function isCgnat(ip) {
+  const m = /^(\d+)\.(\d+)\./.exec(ip);
+  if (!m) return false;
+  const a = Number(m[1]), b = Number(m[2]);
+  return a === 100 && b >= 64 && b <= 127;
+}
+
+// Flag emoji render as bare letters on a lot of Windows font configurations,
+// so use a small flag image instead - reliable everywhere.
+function countryFlagUrl(countryCode) {
+  if (!countryCode || countryCode.length !== 2) return null;
+  return `https://flagcdn.com/24x18/${countryCode.toLowerCase()}.png`;
+}
+
 function parseUserAgent(ua) {
   if (!ua) return { browser: "Unknown", os: "Unknown" };
 
@@ -145,6 +162,7 @@ export async function onRequestGet({ request }) {
     regionCode: cf.regionCode || null,
     postalCode: cf.postalCode || null,
     country: cf.country || null,
+    countryFlagUrl: countryFlagUrl(cf.country),
     continent: cf.continent || null,
     timezone: cf.timezone || null,
     latitude: cf.latitude || null,
@@ -156,6 +174,7 @@ export async function onRequestGet({ request }) {
     tlsVersion: cf.tlsVersion || null,
     tlsCipher: cf.tlsCipher || null,
     likelyHosting: looksLikeHosting(cf.asOrganization),
+    cgnat: !isV6 && ip !== "unknown" ? isCgnat(ip) : false,
     ptr,
     blocklist,
     weather,
