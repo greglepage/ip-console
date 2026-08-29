@@ -323,6 +323,7 @@
   }
   .speed-value.pending { color: var(--muted); }
   .speed-value .unit { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 3px; }
+  .speed-detail { font-size: 11px; color: var(--muted); margin-top: 4px; }
   .speed-body {
     display: flex;
     align-items: center;
@@ -404,21 +405,24 @@
         <div class="speed-stat">
           <div class="speed-label">Ping</div>
           <div class="speed-value pending" id="speed-ping">—</div>
+          <div class="speed-detail" id="speed-ping-detail">6 requests, no payload</div>
         </div>
         <div class="speed-stat">
           <div class="speed-label">Download</div>
           <div class="speed-value pending" id="speed-download">—</div>
+          <div class="speed-detail" id="speed-download-detail">up to 25 MB, 8s max</div>
         </div>
         <div class="speed-stat">
           <div class="speed-label">Upload</div>
           <div class="speed-value pending" id="speed-upload">—</div>
+          <div class="speed-detail" id="speed-upload-detail">up to 8 MB, 8s max</div>
         </div>
       </div>
       <div class="speed-body">
         <div class="speed-status" id="speed-status">Not tested yet</div>
         <button class="copy-btn" id="speed-btn">Run speed test</button>
       </div>
-      <div class="note">Ping, download, and upload throughput to Cloudflare's nearest datacenter — not a certified ISP speed test, but a slow result here means real content will load and save slowly too. Each stage runs for up to 8 seconds.</div>
+      <div class="note">Ping (6 tiny requests), then a download of up to 25 MB and an upload of up to 8 MB — each capped at 8 seconds, so a slow connection is measured on however much actually transferred in that window rather than waiting to finish. Throughput to Cloudflare's nearest datacenter, not a certified ISP speed test, but a slow result here means real content will load and save slowly too.</div>
     </div>
   </div>
 
@@ -685,7 +689,7 @@
       clearTimeout(capTimer);
     }
     var seconds = (performance.now() - start) / 1000;
-    return { mbps: (bytes * 8 / 1e6) / seconds, bytes: bytes };
+    return { mbps: (bytes * 8 / 1e6) / seconds, bytes: bytes, seconds: seconds };
   }
 
   function buildRandomPayload(bytes) {
@@ -712,7 +716,7 @@
       function finish() {
         clearTimeout(capTimer);
         var seconds = (lastTime - start) / 1000;
-        resolve({ mbps: seconds > 0 ? (lastLoaded * 8 / 1e6) / seconds : 0, bytes: lastLoaded });
+        resolve({ mbps: seconds > 0 ? (lastLoaded * 8 / 1e6) / seconds : 0, bytes: lastLoaded, seconds: seconds });
       }
       xhr.upload.addEventListener('load', finish);
       xhr.upload.addEventListener('abort', finish);
@@ -721,6 +725,10 @@
       xhr.open('POST', '/api/upload');
       xhr.send(payload);
     });
+  }
+
+  function formatBytes(bytes) {
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   }
 
   document.getElementById('speed-btn').addEventListener('click', async function () {
@@ -733,25 +741,31 @@
       node.classList.add('pending');
       node.textContent = '—';
     });
+    document.getElementById('speed-ping-detail').textContent = '6 requests, no payload';
+    document.getElementById('speed-download-detail').textContent = 'up to 25 MB, 8s max';
+    document.getElementById('speed-upload-detail').textContent = 'up to 8 MB, 8s max';
 
     try {
-      status.textContent = 'Testing ping…';
+      status.textContent = 'Pinging api/ping — 6 requests, no payload…';
       var ping = await measurePing();
       setSpeedValue('speed-ping', Math.round(ping.avgMs) + '<span class="unit"> ms</span>');
+      document.getElementById('speed-ping-detail').textContent = 'jitter ' + Math.round(ping.jitterMs) + ' ms';
 
-      status.textContent = 'Testing download…';
+      status.textContent = 'Downloading speedtest.bin — up to 25 MB, 8s max…';
       var down = await measureDownload(function (mbps) {
         setSpeedValue('speed-download', mbps.toFixed(1) + '<span class="unit"> Mbps</span>');
       });
       setSpeedValue('speed-download', down.mbps.toFixed(1) + '<span class="unit"> Mbps</span>');
+      document.getElementById('speed-download-detail').textContent = formatBytes(down.bytes) + ' in ' + down.seconds.toFixed(1) + 's' + (down.seconds >= 7.9 ? ' (capped)' : '');
 
-      status.textContent = 'Testing upload…';
+      status.textContent = 'Uploading to api/upload — up to 8 MB, 8s max…';
       var up = await measureUpload(function (mbps) {
         setSpeedValue('speed-upload', mbps.toFixed(1) + '<span class="unit"> Mbps</span>');
       });
       setSpeedValue('speed-upload', up.mbps.toFixed(1) + '<span class="unit"> Mbps</span>');
+      document.getElementById('speed-upload-detail').textContent = formatBytes(up.bytes) + ' in ' + up.seconds.toFixed(1) + 's' + (up.seconds >= 7.9 ? ' (capped)' : '');
 
-      status.textContent = 'Done — jitter ' + Math.round(ping.jitterMs) + ' ms';
+      status.textContent = 'Done';
     } catch (err) {
       status.textContent = 'Test failed: ' + err.message;
     }
