@@ -2,6 +2,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <style>
   :root {
     --ink: #14171E;
@@ -207,36 +208,23 @@
 
   /* ---------- map ---------- */
   .map-card { margin-top: 14px; padding: 10px; }
-  .map-wrap {
-    position: relative;
+  .leaflet-map {
     width: 100%;
-    max-width: 460px;
-    aspect-ratio: 1 / 1;
-    margin: 0 auto;
+    height: 380px;
     border-radius: 8px;
-    overflow: hidden;
     background: var(--surface-2);
+    font-family: "Sora", sans-serif;
   }
-  .map-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    grid-template-rows: repeat(3, 1fr);
-    width: 100%;
-    height: 100%;
-  }
-  .map-grid img { width: 100%; height: 100%; display: block; object-fit: cover; }
-  .map-pin {
+  .map-pin-icon { position: relative; width: 16px; height: 16px; }
+  .map-pin-icon .dot {
     position: absolute;
-    width: 16px;
-    height: 16px;
+    inset: 0;
     background: var(--signal);
     border: 2.5px solid var(--surface);
     border-radius: 50%;
-    transform: translate(-50%, -50%);
     box-shadow: 0 0 0 4px var(--signal-bg), 0 2px 8px rgba(0,0,0,0.35);
   }
-  .map-pin::after {
-    content: "";
+  .map-pin-icon .ring {
     position: absolute;
     inset: -10px;
     border-radius: 50%;
@@ -244,17 +232,16 @@
     opacity: 0.55;
     animation: pin-pulse 2.2s ease-out infinite;
   }
-  @media (prefers-reduced-motion: reduce) { .map-pin::after { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .map-pin-icon .ring { animation: none; } }
   @keyframes pin-pulse {
     0% { transform: scale(0.6); opacity: 0.6; }
     100% { transform: scale(2.2); opacity: 0; }
   }
-  .map-credit {
+  .map-note {
     font-size: 11px;
     color: var(--muted);
     padding: 8px 6px 2px;
   }
-  .map-credit a { color: var(--muted); text-decoration: underline; }
 
   /* ---------- section grid ---------- */
   .grid {
@@ -315,6 +302,27 @@
     line-height: 1.6;
   }
 
+  .speed-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--line);
+  }
+  .speed-stat { background: var(--surface); padding: 16px; text-align: center; }
+  .speed-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .speed-value {
+    font-family: "Space Mono", monospace;
+    font-size: 22px;
+    font-weight: 700;
+  }
+  .speed-value.pending { color: var(--muted); }
+  .speed-value .unit { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 3px; }
   .speed-body {
     display: flex;
     align-items: center;
@@ -322,12 +330,7 @@
     gap: 12px;
     padding: 14px 16px;
   }
-  .speed-result {
-    font-family: "Space Mono", monospace;
-    font-size: 20px;
-    font-weight: 700;
-  }
-  .speed-result .unit { font-size: 13px; font-weight: 400; color: var(--muted); margin-left: 4px; }
+  .speed-status { font-size: 13px; color: var(--muted); }
 
   .loading-state {
     padding: 40px 0;
@@ -366,11 +369,8 @@
     </div>
 
     <div class="card map-card" id="map-card" style="display:none;">
-      <div class="map-wrap">
-        <div class="map-grid" id="map-grid"></div>
-        <div class="map-pin" id="map-pin" title="Approximate location"></div>
-      </div>
-      <div class="map-credit">Map data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors — pin location is approximate</div>
+      <div class="leaflet-map" id="leaflet-map"></div>
+      <div class="map-note">Scroll or use the controls to zoom, drag to pan — pin location is approximate.</div>
     </div>
 
     <div class="grid">
@@ -399,18 +399,33 @@
     </div>
 
     <div class="card" style="margin-top: 14px;">
-      <div class="card-head">Download speed to Cloudflare's edge</div>
-      <div class="speed-body">
-        <div id="speed-result" class="speed-result">Not tested yet</div>
-        <button class="copy-btn" id="speed-btn">Run test (2 MB)</button>
+      <div class="card-head">Speed test</div>
+      <div class="speed-grid">
+        <div class="speed-stat">
+          <div class="speed-label">Ping</div>
+          <div class="speed-value pending" id="speed-ping">—</div>
+        </div>
+        <div class="speed-stat">
+          <div class="speed-label">Download</div>
+          <div class="speed-value pending" id="speed-download">—</div>
+        </div>
+        <div class="speed-stat">
+          <div class="speed-label">Upload</div>
+          <div class="speed-value pending" id="speed-upload">—</div>
+        </div>
       </div>
-      <div class="note">Measures throughput to the nearest Cloudflare datacenter, not a full internet speed test — but a slow result here still means real content will load slowly.</div>
+      <div class="speed-body">
+        <div class="speed-status" id="speed-status">Not tested yet</div>
+        <button class="copy-btn" id="speed-btn">Run speed test</button>
+      </div>
+      <div class="note">Ping, download, and upload throughput to Cloudflare's nearest datacenter — not a certified ISP speed test, but a slow result here means real content will load and save slowly too. Each stage runs for up to 8 seconds.</div>
     </div>
   </div>
 
   <footer>ip.greglepage.com — every value above comes from Cloudflare's edge at request time (geolocation, network, and connection details) plus a live reverse-DNS lookup. Nothing is cached, logged, or shared.</footer>
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
   function el(tag, opts) {
     var node = document.createElement(tag);
@@ -447,32 +462,23 @@
   function renderMap(lat, lon) {
     if (lat === null || lon === null || lat === undefined || lon === undefined) return;
     lat = Number(lat); lon = Number(lon);
-    var zoom = 10;
-    var n = Math.pow(2, zoom);
-    var fracX = (lon + 180) / 360 * n;
-    var latRad = lat * Math.PI / 180;
-    var fracY = (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n;
-    var centerX = Math.floor(fracX);
-    var centerY = Math.floor(fracY);
-
-    var grid = document.getElementById('map-grid');
-    for (var dy = -1; dy <= 1; dy++) {
-      for (var dx = -1; dx <= 1; dx++) {
-        var tx = ((centerX + dx) % n + n) % n;
-        var ty = centerY + dy;
-        var img = el('img');
-        if (ty >= 0 && ty < n) {
-          img.src = 'https://tile.openstreetmap.org/' + zoom + '/' + tx + '/' + ty + '.png';
-          img.alt = '';
-        }
-        grid.appendChild(img);
-      }
-    }
-
-    var pin = document.getElementById('map-pin');
-    pin.style.left = ((fracX - (centerX - 1)) / 3 * 100) + '%';
-    pin.style.top = ((fracY - (centerY - 1)) / 3 * 100) + '%';
     document.getElementById('map-card').style.display = 'block';
+
+    var map = L.map('leaflet-map', { scrollWheelZoom: true }).setView([lat, lon], 12);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
+    }).addTo(map);
+
+    var pinIcon = L.divIcon({
+      className: '',
+      html: '<div class="map-pin-icon"><div class="ring"></div><div class="dot"></div></div>',
+      iconSize: [16, 16],
+      iconAnchor: [8, 8],
+    });
+    L.marker([lat, lon], { icon: pinIcon, title: 'Approximate location' }).addTo(map);
+
+    setTimeout(function () { map.invalidateSize(); }, 200);
   }
 
   var reportText = '';
@@ -633,22 +639,117 @@
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   });
 
+  function setSpeedValue(id, text) {
+    var node = document.getElementById(id);
+    node.classList.remove('pending');
+    node.innerHTML = text;
+  }
+
+  async function measurePing() {
+    var samples = [];
+    for (var i = 0; i < 6; i++) {
+      var start = performance.now();
+      await fetch('/api/ping?x=' + Date.now() + '-' + i, { cache: 'no-store' });
+      samples.push(performance.now() - start);
+    }
+    samples.shift(); // drop the first - connection setup skews it
+    var avg = samples.reduce(function (a, b) { return a + b; }, 0) / samples.length;
+    var jitter = Math.max.apply(null, samples) - Math.min.apply(null, samples);
+    return { avgMs: avg, jitterMs: jitter };
+  }
+
+  async function measureDownload(onProgress) {
+    var controller = new AbortController();
+    var capTimer = setTimeout(function () { controller.abort(); }, 8000);
+    var start = performance.now();
+    var bytes = 0;
+    try {
+      var res = await fetch('/speedtest.bin?x=' + Date.now(), { cache: 'no-store', signal: controller.signal });
+      var reader = res.body.getReader();
+      while (true) {
+        var chunk = await reader.read();
+        if (chunk.done) break;
+        bytes += chunk.value.length;
+        var elapsed = (performance.now() - start) / 1000;
+        if (elapsed > 0.15) onProgress((bytes * 8 / 1e6) / elapsed);
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') throw err;
+    } finally {
+      clearTimeout(capTimer);
+    }
+    var seconds = (performance.now() - start) / 1000;
+    return { mbps: (bytes * 8 / 1e6) / seconds, bytes: bytes };
+  }
+
+  function buildRandomPayload(bytes) {
+    var buf = new Uint8Array(bytes);
+    for (var i = 0; i < bytes; i++) buf[i] = (Math.random() * 256) | 0;
+    return buf;
+  }
+
+  function measureUpload(onProgress) {
+    return new Promise(function (resolve) {
+      var payload = buildRandomPayload(8 * 1024 * 1024);
+      var xhr = new XMLHttpRequest();
+      var start = performance.now();
+      var lastLoaded = 0, lastTime = start;
+      var capTimer = setTimeout(function () { xhr.abort(); }, 8000);
+
+      xhr.upload.addEventListener('progress', function (e) {
+        var now = performance.now();
+        lastLoaded = e.loaded;
+        lastTime = now;
+        var elapsed = (now - start) / 1000;
+        if (elapsed > 0.15) onProgress((e.loaded * 8 / 1e6) / elapsed);
+      });
+      function finish() {
+        clearTimeout(capTimer);
+        var seconds = (lastTime - start) / 1000;
+        resolve({ mbps: seconds > 0 ? (lastLoaded * 8 / 1e6) / seconds : 0, bytes: lastLoaded });
+      }
+      xhr.upload.addEventListener('load', finish);
+      xhr.upload.addEventListener('abort', finish);
+      xhr.upload.addEventListener('error', finish);
+      xhr.addEventListener('load', finish);
+      xhr.open('POST', '/api/upload');
+      xhr.send(payload);
+    });
+  }
+
   document.getElementById('speed-btn').addEventListener('click', async function () {
     var btn = this;
-    var result = document.getElementById('speed-result');
+    var status = document.getElementById('speed-status');
     btn.disabled = true;
-    btn.textContent = 'Testing…';
-    result.textContent = 'Downloading 2 MB…';
+
+    ['speed-ping', 'speed-download', 'speed-upload'].forEach(function (id) {
+      var node = document.getElementById(id);
+      node.classList.add('pending');
+      node.textContent = '—';
+    });
+
     try {
-      var start = performance.now();
-      var res = await fetch('/speedtest.bin?x=' + Date.now(), { cache: 'no-store' });
-      var blob = await res.blob();
-      var seconds = (performance.now() - start) / 1000;
-      var mbps = (blob.size * 8 / 1e6) / seconds;
-      result.innerHTML = mbps.toFixed(1) + '<span class="unit"> Mbps</span>';
+      status.textContent = 'Testing ping…';
+      var ping = await measurePing();
+      setSpeedValue('speed-ping', Math.round(ping.avgMs) + '<span class="unit"> ms</span>');
+
+      status.textContent = 'Testing download…';
+      var down = await measureDownload(function (mbps) {
+        setSpeedValue('speed-download', mbps.toFixed(1) + '<span class="unit"> Mbps</span>');
+      });
+      setSpeedValue('speed-download', down.mbps.toFixed(1) + '<span class="unit"> Mbps</span>');
+
+      status.textContent = 'Testing upload…';
+      var up = await measureUpload(function (mbps) {
+        setSpeedValue('speed-upload', mbps.toFixed(1) + '<span class="unit"> Mbps</span>');
+      });
+      setSpeedValue('speed-upload', up.mbps.toFixed(1) + '<span class="unit"> Mbps</span>');
+
+      status.textContent = 'Done — jitter ' + Math.round(ping.jitterMs) + ' ms';
     } catch (err) {
-      result.textContent = 'Test failed: ' + err.message;
+      status.textContent = 'Test failed: ' + err.message;
     }
+
     btn.disabled = false;
     btn.textContent = 'Run again';
   });
