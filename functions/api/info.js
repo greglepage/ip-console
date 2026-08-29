@@ -141,16 +141,65 @@ async function getWeather(lat, lon) {
   }
 }
 
+function vcardField(vcardArray, field) {
+  if (!Array.isArray(vcardArray) || !Array.isArray(vcardArray[1])) return null;
+  const entry = vcardArray[1].find((e) => e[0] === field);
+  return entry ? entry[3] : null;
+}
+
+function findEntityEmail(entities, role) {
+  if (!Array.isArray(entities)) return null;
+  for (const e of entities) {
+    if (Array.isArray(e.roles) && e.roles.includes(role)) {
+      const email = vcardField(e.vcardArray, "email");
+      if (email) return email;
+    }
+    const nested = findEntityEmail(e.entities, role);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+// rdap.org resolves to the correct Regional Internet Registry (ARIN, RIPE,
+// APNIC, ...) for this specific address - the network block it was allocated
+// in, who holds it, and who to contact about abuse from it.
+async function getIpRdap(ip) {
+  try {
+    const res = await fetch(`https://rdap.org/ip/${ip}`, {
+      headers: { accept: "application/rdap+json", "user-agent": "ip.greglepage.com (RDAP client)" },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const cidr = data.cidr0_cidrs && data.cidr0_cidrs[0];
+    const registryHost = new URL(res.url).hostname;
+    const registry = /arin/.test(registryHost) ? "ARIN"
+      : /ripe/.test(registryHost) ? "RIPE NCC"
+      : /apnic/.test(registryHost) ? "APNIC"
+      : /lacnic/.test(registryHost) ? "LACNIC"
+      : /afrinic/.test(registryHost) ? "AFRINIC"
+      : registryHost;
+    return {
+      networkName: data.name || null,
+      networkCidr: cidr ? `${cidr.v4prefix || cidr.v6prefix}/${cidr.length}` : (data.startAddress && data.endAddress ? `${data.startAddress} - ${data.endAddress}` : null),
+      registry,
+      abuseEmail: findEntityEmail(data.entities, "abuse"),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function onRequestGet({ request }) {
   const cf = request.cf || {};
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
   const isV6 = ip.includes(":");
   const ua = request.headers.get("user-agent") || "";
 
-  const [ptr, blocklist, weather] = await Promise.all([
+  const [ptr, blocklist, weather, ipRdap] = await Promise.all([
     ip !== "unknown" ? reversePtr(ip, isV6) : Promise.resolve({ found: false, hostnames: [] }),
     ip !== "unknown" ? checkBlocklist(ip, isV6) : Promise.resolve({ checked: false, listed: false }),
     cf.latitude && cf.longitude ? getWeather(cf.latitude, cf.longitude) : Promise.resolve(null),
+    ip !== "unknown" ? getIpRdap(ip) : Promise.resolve(null),
   ]);
   const { browser, os } = parseUserAgent(ua);
 
@@ -178,6 +227,7 @@ export async function onRequestGet({ request }) {
     ptr,
     blocklist,
     weather,
+    ipRdap,
     browser,
     os,
     userAgent: ua,

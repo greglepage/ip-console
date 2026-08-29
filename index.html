@@ -551,7 +551,14 @@
     kvRow(net, 'ASN', d.asn ? 'AS' + d.asn : null);
     kvRow(net, 'Organization', d.asOrganization);
     kvRow(net, 'Address type', d.likelyHosting ? 'Hosting / VPN / datacenter' : 'Residential or business ISP');
+    if (d.cgnat) kvRow(net, 'Carrier-grade NAT', 'Yes — shared with other customers');
     if (d.blocklist && d.blocklist.checked) kvRow(net, 'Spamhaus Zen', d.blocklist.listed ? 'Listed' : 'Not listed');
+    if (d.ipRdap) {
+      kvRow(net, 'Network block', d.ipRdap.networkCidr);
+      kvRow(net, 'Network name', d.ipRdap.networkName);
+      kvRow(net, 'Registry', d.ipRdap.registry);
+      kvRow(net, 'Abuse contact', d.ipRdap.abuseEmail);
+    }
 
     var conn = document.getElementById('connection-table');
     kvRow(conn, 'Cloudflare colo', d.colo);
@@ -587,6 +594,9 @@
       'Address type: ' + (d.likelyHosting ? 'Hosting / VPN / datacenter' : 'Residential or business ISP'),
       d.cgnat ? 'Carrier-grade NAT: yes (shared IP)' : null,
       d.blocklist && d.blocklist.checked ? 'Spamhaus Zen: ' + (d.blocklist.listed ? 'LISTED' : 'not listed') : null,
+      d.ipRdap && d.ipRdap.networkCidr ? 'Network block: ' + d.ipRdap.networkCidr + (d.ipRdap.networkName ? ' (' + d.ipRdap.networkName + ')' : '') : null,
+      d.ipRdap && d.ipRdap.registry ? 'Registry: ' + d.ipRdap.registry : null,
+      d.ipRdap && d.ipRdap.abuseEmail ? 'Abuse contact: ' + d.ipRdap.abuseEmail : null,
       d.colo ? 'Cloudflare colo: ' + d.colo : null,
       d.httpProtocol ? 'HTTP protocol: ' + d.httpProtocol : null,
       d.tlsVersion ? 'TLS: ' + d.tlsVersion + (d.tlsCipher ? ' (' + d.tlsCipher + ')' : '') : null,
