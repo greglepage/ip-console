@@ -78,13 +78,63 @@ async function reversePtr(ip, isV6) {
   }
 }
 
+// Spamhaus Zen combines their SBL/XBL/PBL lists behind one DNSBL - a listing
+// there is a strong "this address has sent spam or is an open proxy" signal.
+// IPv4 only; there's no widely-supported IPv6 equivalent of this lookup.
+async function checkBlocklist(ip, isV6) {
+  if (isV6) return { checked: false, listed: false };
+  try {
+    const reversed = ip.split(".").reverse().join(".");
+    const res = await fetch(`https://cloudflare-dns.com/dns-query?name=${reversed}.zen.spamhaus.org&type=A`, {
+      headers: { accept: "application/dns-json" },
+    });
+    const data = await res.json();
+    return { checked: true, listed: (data.Answer || []).length > 0 };
+  } catch {
+    return { checked: false, listed: false };
+  }
+}
+
+const WEATHER_CODES = {
+  0: "Clear sky", 1: "Mostly clear", 2: "Partly cloudy", 3: "Overcast",
+  45: "Fog", 48: "Depositing rime fog",
+  51: "Light drizzle", 53: "Drizzle", 55: "Dense drizzle",
+  61: "Light rain", 63: "Rain", 65: "Heavy rain",
+  71: "Light snow", 73: "Snow", 75: "Heavy snow", 77: "Snow grains",
+  80: "Light showers", 81: "Showers", 82: "Violent showers",
+  85: "Snow showers", 86: "Heavy snow showers",
+  95: "Thunderstorm", 96: "Thunderstorm with hail", 99: "Severe thunderstorm with hail",
+};
+
+async function getWeather(lat, lon) {
+  if (lat === undefined || lon === undefined) return null;
+  try {
+    const res = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&temperature_unit=fahrenheit&windspeed_unit=mph`
+    );
+    const data = await res.json();
+    if (!data.current_weather) return null;
+    return {
+      tempF: data.current_weather.temperature,
+      windMph: data.current_weather.windspeed,
+      description: WEATHER_CODES[data.current_weather.weathercode] || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function onRequestGet({ request }) {
   const cf = request.cf || {};
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
   const isV6 = ip.includes(":");
   const ua = request.headers.get("user-agent") || "";
 
-  const ptr = ip !== "unknown" ? await reversePtr(ip, isV6) : { found: false, hostnames: [] };
+  const [ptr, blocklist, weather] = await Promise.all([
+    ip !== "unknown" ? reversePtr(ip, isV6) : Promise.resolve({ found: false, hostnames: [] }),
+    ip !== "unknown" ? checkBlocklist(ip, isV6) : Promise.resolve({ checked: false, listed: false }),
+    cf.latitude && cf.longitude ? getWeather(cf.latitude, cf.longitude) : Promise.resolve(null),
+  ]);
   const { browser, os } = parseUserAgent(ua);
 
   return json({
@@ -107,6 +157,8 @@ export async function onRequestGet({ request }) {
     tlsCipher: cf.tlsCipher || null,
     likelyHosting: looksLikeHosting(cf.asOrganization),
     ptr,
+    blocklist,
+    weather,
     browser,
     os,
     userAgent: ua,
