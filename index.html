@@ -523,8 +523,14 @@
       pill(flags, d.blocklist.listed ? 'bad' : 'good', d.blocklist.listed ? 'On the Spamhaus blocklist' : 'Not on the Spamhaus blocklist');
     }
     if (tzMismatch) pill(flags, 'warn', "Device clock doesn't match this location's timezone");
-    if (d.tlsVersion) pill(flags, 'neutral', d.tlsVersion);
-    if (d.httpProtocol) pill(flags, 'neutral', d.httpProtocol + (d.httpProtocol !== 'HTTP/3' ? ' — QUIC/UDP may be blocked' : ''));
+    if (d.tlsVersion) {
+      var tlsCls = d.tlsVersion === 'TLSv1.3' ? 'good' : d.tlsVersion === 'TLSv1.2' ? 'warn' : 'bad';
+      pill(flags, tlsCls, d.tlsVersion);
+    }
+    if (d.httpProtocol) {
+      var isH3 = d.httpProtocol === 'HTTP/3';
+      pill(flags, isH3 ? 'good' : 'warn', d.httpProtocol + (isH3 ? '' : ' — QUIC/UDP may be blocked'));
+    }
 
     var loc = document.getElementById('location-table');
     kvRow(loc, 'City', d.city);
