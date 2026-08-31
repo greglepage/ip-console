@@ -523,9 +523,6 @@
     if (d.likelyHosting) pill(flags, 'warn', 'Likely hosting/VPN, not residential');
     else pill(flags, 'good', 'Looks residential/ISP-assigned');
     if (d.cgnat) pill(flags, 'warn', 'Carrier-grade NAT (shared IP)');
-    if (d.blocklist && d.blocklist.checked) {
-      pill(flags, d.blocklist.listed ? 'bad' : 'good', d.blocklist.listed ? 'On the Spamhaus blocklist' : 'Not on the Spamhaus blocklist');
-    }
     if (tzMismatch) pill(flags, 'warn', "Device clock doesn't match this location's timezone");
     if (d.tlsVersion) {
       var tlsCls = d.tlsVersion === 'TLSv1.3' ? 'good' : d.tlsVersion === 'TLSv1.2' ? 'warn' : 'bad';
@@ -568,7 +565,6 @@
     kvRow(net, 'Organization', d.asOrganization);
     kvRow(net, 'Address type', d.likelyHosting ? 'Hosting / VPN / datacenter' : 'Residential or business ISP');
     if (d.cgnat) kvRow(net, 'Carrier-grade NAT', 'Yes — shared with other customers');
-    if (d.blocklist && d.blocklist.checked) kvRow(net, 'Spamhaus Zen', d.blocklist.listed ? 'Listed' : 'Not listed');
     if (d.ipRdap) {
       kvRow(net, 'Network block', d.ipRdap.networkCidr);
       kvRow(net, 'Network name', d.ipRdap.networkName);
@@ -609,7 +605,6 @@
       d.asn ? 'ASN: AS' + d.asn + (d.asOrganization ? ' ' + d.asOrganization : '') : null,
       'Address type: ' + (d.likelyHosting ? 'Hosting / VPN / datacenter' : 'Residential or business ISP'),
       d.cgnat ? 'Carrier-grade NAT: yes (shared IP)' : null,
-      d.blocklist && d.blocklist.checked ? 'Spamhaus Zen: ' + (d.blocklist.listed ? 'LISTED' : 'not listed') : null,
       d.ipRdap && d.ipRdap.networkCidr ? 'Network block: ' + d.ipRdap.networkCidr + (d.ipRdap.networkName ? ' (' + d.ipRdap.networkName + ')' : '') : null,
       d.ipRdap && d.ipRdap.registry ? 'Registry: ' + d.ipRdap.registry : null,
       d.ipRdap && d.ipRdap.abuseEmail ? 'Abuse contact: ' + d.ipRdap.abuseEmail : null,

@@ -95,23 +95,6 @@ async function reversePtr(ip, isV6) {
   }
 }
 
-// Spamhaus Zen combines their SBL/XBL/PBL lists behind one DNSBL - a listing
-// there is a strong "this address has sent spam or is an open proxy" signal.
-// IPv4 only; there's no widely-supported IPv6 equivalent of this lookup.
-async function checkBlocklist(ip, isV6) {
-  if (isV6) return { checked: false, listed: false };
-  try {
-    const reversed = ip.split(".").reverse().join(".");
-    const res = await fetch(`https://cloudflare-dns.com/dns-query?name=${reversed}.zen.spamhaus.org&type=A`, {
-      headers: { accept: "application/dns-json" },
-    });
-    const data = await res.json();
-    return { checked: true, listed: (data.Answer || []).length > 0 };
-  } catch {
-    return { checked: false, listed: false };
-  }
-}
-
 const WEATHER_CODES = {
   0: "Clear sky", 1: "Mostly clear", 2: "Partly cloudy", 3: "Overcast",
   45: "Fog", 48: "Depositing rime fog",
@@ -195,9 +178,8 @@ export async function onRequestGet({ request }) {
   const isV6 = ip.includes(":");
   const ua = request.headers.get("user-agent") || "";
 
-  const [ptr, blocklist, weather, ipRdap] = await Promise.all([
+  const [ptr, weather, ipRdap] = await Promise.all([
     ip !== "unknown" ? reversePtr(ip, isV6) : Promise.resolve({ found: false, hostnames: [] }),
-    ip !== "unknown" ? checkBlocklist(ip, isV6) : Promise.resolve({ checked: false, listed: false }),
     cf.latitude && cf.longitude ? getWeather(cf.latitude, cf.longitude) : Promise.resolve(null),
     ip !== "unknown" ? getIpRdap(ip) : Promise.resolve(null),
   ]);
@@ -225,7 +207,6 @@ export async function onRequestGet({ request }) {
     likelyHosting: looksLikeHosting(cf.asOrganization),
     cgnat: !isV6 && ip !== "unknown" ? isCgnat(ip) : false,
     ptr,
-    blocklist,
     weather,
     ipRdap,
     browser,
