@@ -268,7 +268,25 @@
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
   }
+  .card-copy {
+    background: none;
+    border: 1px solid transparent;
+    color: var(--muted);
+    font: inherit;
+    letter-spacing: inherit;
+    font-size: 11px;
+    padding: 2px 8px;
+    margin: -3px -8px -3px 0;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .card-copy:hover { color: var(--ink); border-color: var(--line); }
+  .card-copy:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
   table.kv { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   table.kv td {
     padding: 9px 16px;
@@ -360,6 +378,7 @@
       <div class="hero-top">
         <div class="hero-label">Public address</div>
         <div class="hero-actions">
+          <button class="copy-btn" id="copy-ip-btn">Copy IP</button>
           <button class="copy-btn" id="copy-btn">Copy report</button>
           <button class="copy-btn" id="download-btn">Download .txt</button>
         </div>
@@ -376,31 +395,31 @@
 
     <div class="grid">
       <div class="card">
-        <div class="card-head">Location</div>
+        <div class="card-head"><span>Location</span><button class="card-copy" type="button">Copy</button></div>
         <table class="kv" id="location-table"></table>
       </div>
       <div class="card">
-        <div class="card-head">Network</div>
+        <div class="card-head"><span>Network</span><button class="card-copy" type="button">Copy</button></div>
         <table class="kv" id="network-table"></table>
       </div>
       <div class="card">
-        <div class="card-head">Connection to Cloudflare</div>
+        <div class="card-head"><span>Connection to Cloudflare</span><button class="card-copy" type="button">Copy</button></div>
         <table class="kv" id="connection-table"></table>
       </div>
       <div class="card">
-        <div class="card-head">This device</div>
+        <div class="card-head"><span>This device</span><button class="card-copy" type="button">Copy</button></div>
         <table class="kv" id="device-table"></table>
       </div>
     </div>
 
     <div class="card" style="margin-top: 14px;">
-      <div class="card-head">Reverse DNS</div>
+      <div class="card-head"><span>Reverse DNS</span><button class="card-copy" type="button">Copy</button></div>
       <table class="kv" id="ptr-table"></table>
       <div class="note" id="ptr-note"></div>
     </div>
 
     <div class="card" style="margin-top: 14px;">
-      <div class="card-head">Speed test</div>
+      <div class="card-head"><span>Speed test</span><button class="card-copy" type="button">Copy</button></div>
       <div class="speed-grid">
         <div class="speed-stat">
           <div class="speed-label">Ping</div>
@@ -486,6 +505,49 @@
   }
 
   var reportText = '';
+  var speedText = '';
+
+  function copyWithFeedback(btn, text) {
+    var original = btn.textContent;
+    navigator.clipboard.writeText(text).then(function () {
+      btn.textContent = 'Copied';
+    }, function () {
+      btn.textContent = 'Copy failed';
+    }).then(function () {
+      setTimeout(function () { btn.textContent = original; }, 1500);
+    });
+  }
+
+  // Plain-text version of one card: its heading, then "Label: value" per row.
+  function cardText(card) {
+    var lines = [card.querySelector('.card-head span').textContent];
+    if (card.querySelector('.speed-value.pending')) {
+      lines.push(document.getElementById('speed-status').textContent);
+      return lines.join('\n');
+    }
+    card.querySelectorAll('table.kv tr').forEach(function (tr) {
+      var cells = tr.querySelectorAll('td');
+      lines.push(cells[0].textContent + ': ' + cells[1].textContent);
+    });
+    card.querySelectorAll('.speed-stat').forEach(function (stat) {
+      lines.push(stat.querySelector('.speed-label').textContent + ': ' +
+        stat.querySelector('.speed-value').textContent + ' (' +
+        stat.querySelector('.speed-detail').textContent + ')');
+    });
+    var note = card.querySelector('.note');
+    if (note && note.textContent && !card.querySelector('.speed-stat')) lines.push(note.textContent);
+    return lines.join('\n');
+  }
+
+  document.querySelectorAll('.card-copy').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      copyWithFeedback(btn, cardText(btn.closest('.card')));
+    });
+  });
+
+  function fullReport() {
+    return speedText ? reportText + '\n' + speedText : reportText;
+  }
   var fetchStart = performance.now();
 
   fetch('/api/info').then(function (r) {
@@ -624,16 +686,15 @@
   });
 
   document.getElementById('copy-btn').addEventListener('click', function () {
-    var btn = this;
-    navigator.clipboard.writeText(reportText).then(function () {
-      var original = btn.textContent;
-      btn.textContent = 'Copied';
-      setTimeout(function () { btn.textContent = original; }, 1500);
-    });
+    copyWithFeedback(this, fullReport());
+  });
+
+  document.getElementById('copy-ip-btn').addEventListener('click', function () {
+    copyWithFeedback(this, document.getElementById('hero-ip').textContent);
   });
 
   document.getElementById('download-btn').addEventListener('click', function () {
-    var blob = new Blob([reportText], { type: 'text/plain;charset=utf-8;' });
+    var blob = new Blob([fullReport()], { type: 'text/plain;charset=utf-8;' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url;
@@ -761,6 +822,9 @@
       document.getElementById('speed-upload-detail').textContent = formatBytes(up.bytes) + ' in ' + up.seconds.toFixed(1) + 's' + (up.seconds >= 7.9 ? ' (capped)' : '');
 
       status.textContent = 'Done';
+      speedText = 'Speed test: ping ' + Math.round(ping.avgMs) + ' ms (jitter ' + Math.round(ping.jitterMs) + ' ms), download ' +
+        down.mbps.toFixed(1) + ' Mbps (' + formatBytes(down.bytes) + ' in ' + down.seconds.toFixed(1) + 's), upload ' +
+        up.mbps.toFixed(1) + ' Mbps (' + formatBytes(up.bytes) + ' in ' + up.seconds.toFixed(1) + 's)';
     } catch (err) {
       status.textContent = 'Test failed: ' + err.message;
     }
